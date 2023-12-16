@@ -54,3 +54,16 @@ fn arg_send_sync() {
     fn foo<T: Send + Sync>(_: T) {}
     foo(Arg::new("test"))
 }
+
+#[test]
+fn value_parser_hrtb() {
+    #[derive(Clone)]
+    struct Offset;
+
+    fn offset_parse(_: impl AsRef<str>) -> Result<Offset, String> {
+        Ok(Offset)
+    }
+
+    let arg = Arg::new("offset").value_parser(offset_parse);
+    let _cmd = Command::new("command").arg(arg);
+}

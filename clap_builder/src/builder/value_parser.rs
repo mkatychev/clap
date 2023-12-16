@@ -905,9 +905,30 @@ pub trait TypedValueParser: Clone + Send + Sync + 'static {
     }
 }
 
+pub trait Callback<'a> {
+    type Ok: Send + Sync + Clone + 'a;
+    type Error: Into<Box<dyn std::error::Error + Send + Sync + 'static>>;
+
+    fn call(&self, value: &'a str) -> Result<Self::Ok, Self::Error>;
+}
+
+impl<'a, F, T, E> Callback<'a> for F
+where
+    F: Fn(&'a str) -> Result<T, E>,
+    T: Send + Sync + Clone + 'a,
+    E: Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
+{
+    type Ok = T;
+    type Error = E;
+
+    fn call(&self, value: &'a str) -> Result<Self::Ok, Self::Error> {
+        self(value)
+    }
+}
+
 impl<F, T, E> TypedValueParser for F
 where
-    F: Fn(&str) -> Result<T, E> + Clone + Send + Sync + 'static,
+    for<'a> F: Callback<'a, Ok = T, Error = E> + Clone + Send + Sync + 'static,
     E: Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
     T: Send + Sync + Clone,
 {
@@ -925,7 +946,7 @@ where
                 crate::output::Usage::new(cmd).create_usage_with_title(&[]),
             )
         }));
-        let value = ok!((self)(value).map_err(|e| {
+        let value = ok!(self.call(value).map_err(|e| {
             let arg = arg
                 .map(|a| a.to_string())
                 .unwrap_or_else(|| "...".to_owned());
